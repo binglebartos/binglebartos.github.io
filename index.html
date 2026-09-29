@@ -137,7 +137,143 @@
         }
 
         .controls-bar {
-            margin-bottom: 18px;
+            margin-bottom: 14px;
+        }
+
+        .mode-status {
+            margin: 0 0 10px;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+            text-transform: lowercase;
+        }
+
+        .favorites-section {
+            margin: 0 0 18px;
+        }
+
+        .favorites-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 9px;
+        }
+
+        .favorites-title {
+            margin: 0;
+            font-size: 13px;
+            font-weight: 900;
+        }
+
+        .favorites-empty {
+            margin: 0;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .favorites-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .favorite-card {
+            position: relative;
+            min-width: 0;
+            overflow: hidden;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .favorite-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+        }
+
+        .favorite-card img {
+            display: block;
+            width: 100%;
+            aspect-ratio: 16 / 10;
+            object-fit: cover;
+            background: var(--surface-2);
+        }
+
+        .favorite-card-title {
+            margin: 0;
+            padding: 9px 10px 10px;
+            color: var(--text);
+            font-size: 12px;
+            font-weight: 800;
+            line-height: 1.25;
+        }
+
+        .favorite-remove {
+            position: absolute;
+            top: 7px;
+            right: 7px;
+            width: 29px;
+            height: 29px;
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            border-radius: 9px;
+            background: rgba(0, 0, 0, 0.72);
+            color: white;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .favorite-remove:hover {
+            background: var(--accent);
+        }
+
+        .game-card,
+        .game-item,
+        .game {
+            position: relative;
+        }
+
+        .favorite-toggle {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 8;
+            width: 31px;
+            height: 31px;
+            padding: 0;
+            border: 1px solid rgba(0, 0, 0, 0.14);
+            border-radius: 9px;
+            background: rgba(0, 0, 0, 0.72);
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .favorite-toggle.active {
+            color: #ffd36a;
+        }
+
+        .favorite-toggle:hover {
+            transform: scale(1.05);
+        }
+
+        #lumin-wrap {
+            width: 100%;
+        }
+
+        #lumin-games {
+            width: 100%;
+            min-height: 500px;
+        }
+
+        .lumin-hidden {
+            display: none !important;
         }
 
         #search {
@@ -273,19 +409,22 @@
         /* responsive */
 
         @media (min-width: 1300px) and (max-width: 1499px) {
-            .game-grid {
+            .game-grid,
+            .favorites-grid {
                 grid-template-columns: repeat(6, minmax(0, 1fr));
             }
         }
 
         @media (min-width: 950px) and (max-width: 1299px) {
-            .game-grid {
+            .game-grid,
+            .favorites-grid {
                 grid-template-columns: repeat(5, minmax(0, 1fr));
             }
         }
 
         @media (min-width: 700px) and (max-width: 949px) {
-            .game-grid {
+            .game-grid,
+            .favorites-grid {
                 grid-template-columns: repeat(4, minmax(0, 1fr));
             }
         }
@@ -315,7 +454,8 @@
                 padding-top: 12px;
             }
 
-            .game-grid {
+            .game-grid,
+            .favorites-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
                 gap: 10px;
             }
@@ -372,6 +512,10 @@
                     light
                 </button>
 
+                <button class="theme-toggle" id="mode-toggle" type="button">
+                    lumin
+                </button>
+
             </nav>
 
         </div>
@@ -390,11 +534,25 @@
             >
         </section>
 
+        <section class="favorites-section" id="favorites-section">
+            <div class="favorites-header">
+                <h2 class="favorites-title">favorites</h2>
+            </div>
+            <div class="favorites-grid" id="favorites-grid"></div>
+            <p class="favorites-empty" id="favorites-empty">favorite games will appear here.</p>
+        </section>
+
+        <div class="mode-status" id="mode-status">static mode</div>
+
         <p id="no-results" class="no-results" style="display:none;">
             nothing here
         </p>
 
         <div class="game-grid" id="game-grid"></div>
+
+        <div id="lumin-wrap" class="lumin-hidden">
+            <div id="lumin-games"></div>
+        </div>
 
     </main>
 
@@ -425,6 +583,230 @@
 
     <script>
         const themeToggle = document.getElementById("theme-toggle");
+        const modeToggle = document.getElementById("mode-toggle");
+        const search = document.getElementById("search");
+        const gameGrid = document.getElementById("game-grid");
+        const noResults = document.getElementById("no-results");
+        const favoritesGrid = document.getElementById("favorites-grid");
+        const favoritesEmpty = document.getElementById("favorites-empty");
+        const luminWrap = document.getElementById("lumin-wrap");
+        const luminGames = document.getElementById("lumin-games");
+        const modeStatus = document.getElementById("mode-status");
+
+        const FAVORITES_KEY = "velora-favorites";
+        const MODE_KEY = "velora-mode";
+
+        let luminLoaded = false;
+        let luminActive = false;
+
+        function getFavorites() {
+            try {
+                return JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
+            } catch {
+                return [];
+            }
+        }
+
+        function saveFavorites(items) {
+            localStorage.setItem(FAVORITES_KEY, JSON.stringify(items));
+            renderFavorites();
+            syncFavoriteButtons();
+        }
+
+        function gameInfo(card) {
+            const link =
+                (card.matches && card.matches("a[href]") ? card : null) ||
+                card.querySelector("a[href]") ||
+                card.closest("a[href]");
+
+            if (!link || !link.href || link.href.startsWith("javascript:")) {
+                return null;
+            }
+
+            const titleEl =
+                card.querySelector(".game-card-title, .game-title, .game-name") ||
+                card.querySelector("h1, h2, h3, h4, h5, h6");
+
+            const title = (titleEl?.textContent || link.getAttribute("aria-label") || card.textContent || "game")
+                .replace(/\s+/g, " ")
+                .trim();
+
+            const image = card.querySelector("img")?.src || "";
+
+            return {
+                id: link.href,
+                title: title || "game",
+                href: link.href,
+                image
+            };
+        }
+
+        function isFavorite(href) {
+            return getFavorites().some(item => item.href === href);
+        }
+
+        function toggleFavorite(info, event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const favorites = getFavorites();
+            const index = favorites.findIndex(item => item.href === info.href);
+
+            if (index >= 0) {
+                favorites.splice(index, 1);
+            } else {
+                favorites.unshift(info);
+            }
+
+            saveFavorites(favorites);
+        }
+
+        function addFavoriteButton(card) {
+            if (card.querySelector(":scope > .favorite-toggle")) return;
+
+            const info = gameInfo(card);
+            if (!info) return;
+
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "favorite-toggle";
+            button.setAttribute("aria-label", "favorite " + info.title);
+
+            button.addEventListener("click", event => toggleFavorite(info, event));
+
+            card.appendChild(button);
+            updateFavoriteButton(button, info.href);
+        }
+
+        function updateFavoriteButton(button, href) {
+            const active = isFavorite(href);
+            button.classList.toggle("active", active);
+            button.textContent = active ? "★" : "☆";
+            button.title = active ? "remove favorite" : "add favorite";
+        }
+
+        function syncFavoriteButtons() {
+            gameGrid.querySelectorAll(".game-card, .game-item, .game").forEach(card => {
+                addFavoriteButton(card);
+                const button = card.querySelector(":scope > .favorite-toggle");
+                const info = gameInfo(card);
+                if (button && info) updateFavoriteButton(button, info.href);
+            });
+        }
+
+        function renderFavorites() {
+            const favorites = getFavorites();
+            favoritesGrid.innerHTML = "";
+
+            favorites.forEach(item => {
+                const card = document.createElement("div");
+                card.className = "favorite-card";
+
+                const link = document.createElement("a");
+                link.href = item.href;
+                link.target = "_self";
+
+                if (item.image) {
+                    const img = document.createElement("img");
+                    img.src = item.image;
+                    img.alt = "";
+                    img.loading = "lazy";
+                    link.appendChild(img);
+                }
+
+                const title = document.createElement("p");
+                title.className = "favorite-card-title";
+                title.textContent = item.title;
+                link.appendChild(title);
+
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.className = "favorite-remove";
+                remove.textContent = "×";
+                remove.setAttribute("aria-label", "remove " + item.title + " from favorites");
+                remove.addEventListener("click", event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const next = getFavorites().filter(fav => fav.href !== item.href);
+                    saveFavorites(next);
+                });
+
+                card.appendChild(link);
+                card.appendChild(remove);
+                favoritesGrid.appendChild(card);
+            });
+
+            favoritesEmpty.style.display = favorites.length ? "none" : "block";
+        }
+
+        function setMode(mode) {
+            luminActive = mode === "lumin";
+            localStorage.setItem(MODE_KEY, luminActive ? "lumin" : "static");
+
+            gameGrid.classList.toggle("lumin-hidden", luminActive);
+            noResults.classList.toggle("lumin-hidden", luminActive);
+            luminWrap.classList.toggle("lumin-hidden", !luminActive);
+            search.classList.toggle("lumin-hidden", luminActive);
+
+            if (luminActive) {
+                modeToggle.textContent = "static";
+                modeStatus.textContent = "luminSDK mode";
+                if (!luminLoaded) {
+                    loadLumin();
+                } else {
+                    initLumin();
+                }
+            } else {
+                modeToggle.textContent = "lumin";
+                modeStatus.textContent = "static mode";
+                destroyLumin();
+                syncFavoriteButtons();
+            }
+        }
+
+        function loadLumin() {
+            if (window.Lumin) {
+                luminLoaded = true;
+                initLumin();
+                return;
+            }
+
+            const existing = document.querySelector('script[data-lumin-sdk]');
+            if (existing) return;
+
+            const script = document.createElement("script");
+            script.src = "https://cdn.jsdelivr.net/gh/luminsdk/script@latest/lumin.min.js";
+            script.dataset.luminSdk = "true";
+            script.onload = () => {
+                luminLoaded = true;
+                if (luminActive) initLumin();
+            };
+            document.head.appendChild(script);
+        }
+
+        function initLumin() {
+            if (!window.Lumin) return;
+
+            destroyLumin();
+
+            const theme = document.body.classList.contains("light") ? "light" : "dark";
+
+            window.Lumin.init({
+                container: "#lumin-games",
+                theme,
+                columns: 8,
+                rows: 4
+            });
+        }
+
+        function destroyLumin() {
+            if (window.Lumin && typeof window.Lumin.destroy === "function") {
+                try {
+                    window.Lumin.destroy();
+                } catch {}
+            }
+            luminGames.innerHTML = "";
+        }
 
         function updateThemeButton() {
             themeToggle.textContent =
@@ -438,17 +820,37 @@
 
             localStorage.setItem(
                 "velora-theme",
-                light ? "light" : "dark"
+                light ? "light"
+                    : "dark"
             );
 
             updateThemeButton();
+
+            if (luminActive) initLumin();
+        });
+
+        modeToggle.addEventListener("click", () => {
+            setMode(luminActive ? "static" : "lumin");
         });
 
         if (localStorage.getItem("velora-theme") === "light") {
             document.body.classList.add("light");
         }
 
+        renderFavorites();
+        syncFavoriteButtons();
+
+        const observer = new MutationObserver(() => {
+            if (!luminActive) syncFavoriteButtons();
+        });
+
+        observer.observe(gameGrid, {
+            childList: true,
+            subtree: true
+        });
+
         updateThemeButton();
+        setMode(localStorage.getItem(MODE_KEY) === "lumin" ? "lumin" : "static");
     </script>
 
 </body>
