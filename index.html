@@ -654,6 +654,15 @@
         }
 
         /* Misc */
+        #lumin-wrap {
+            width: 100%;
+        }
+
+        #lumin-games {
+            width: 100%;
+            min-height: 560px;
+        }
+
         .lumin-hidden {
             display: none !important;
         }
@@ -941,6 +950,7 @@
 
         let luminLoaded = false;
         let luminActive = false;
+        let luminLoading = null;
 
         const player = document.getElementById("game-player");
         const playerFrame = document.getElementById("game-frame");
@@ -1222,7 +1232,6 @@
                 const info = gameInfo(card);
                 if (!info) return;
 
-                // Keep modifier-key and new-tab behavior intact.
                 if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
                 event.preventDefault();
@@ -1245,9 +1254,6 @@
 
             if (event.key === "Escape" && !document.fullscreenElement) {
                 closeGame(true);
-            } else if (event.key.toLowerCase() === "r" && (event.ctrlKey || event.metaKey)) {
-                // Let the browser handle hard reload; do not steal Ctrl/Cmd+R.
-                return;
             }
         });
 
@@ -1257,7 +1263,18 @@
             }
         });
 
-        function setMode(mode) {
+        function replaceLuminContainer() {
+            const oldContainer = document.getElementById("lumin-games");
+            if (!oldContainer) return null;
+
+            const freshContainer = document.createElement("div");
+            freshContainer.id = "lumin-games";
+            oldContainer.replaceWith(freshContainer);
+
+            return freshContainer;
+        }
+
+        async function setMode(mode) {
             luminActive = mode === "lumin";
             localStorage.setItem(MODE_KEY, luminActive ? "lumin" : "static");
 
@@ -1268,12 +1285,8 @@
 
             if (luminActive) {
                 modeToggle.textContent = "static";
-                modeStatus.textContent = "luminSDK mode";
-                if (!luminLoaded) {
-                    loadLumin();
-                } else {
-                    initLumin();
-                }
+                modeStatus.textContent = "connecting to LuminSDK…";
+                await loadLumin();
             } else {
                 modeToggle.textContent = "lumin";
                 modeStatus.textContent = "static mode";
@@ -1285,45 +1298,113 @@
         function loadLumin() {
             if (window.Lumin) {
                 luminLoaded = true;
-                initLumin();
-                return;
+                return initLumin();
             }
 
-            const existing = document.querySelector('script[data-lumin-sdk]');
-            if (existing) return;
+            if (luminLoading) return luminLoading;
 
-            const script = document.createElement("script");
-            script.src = "https://cdn.jsdelivr.net/gh/luminsdk/script@latest/lumin.min.js";
-            script.dataset.luminSdk = "true";
-            script.onload = () => {
-                luminLoaded = true;
-                if (luminActive) initLumin();
-            };
-            document.head.appendChild(script);
+            luminLoading = new Promise((resolve, reject) => {
+                const existing = document.querySelector('script[data-lumin-sdk]');
+                const script = existing || document.createElement("script");
+
+                let settled = false;
+                const finish = (fn, value) => {
+                    if (settled) return;
+                    settled = true;
+                    fn(value);
+                };
+
+                script.onload = () => {
+                    if (window.Lumin) {
+                        luminLoaded = true;
+                        finish(resolve, true);
+                    } else {
+                        finish(reject, new Error("LuminSDK loaded without the Lumin global."));
+                    }
+                };
+
+                script.onerror = () => finish(reject, new Error("Could not load LuminSDK."));
+
+                if (!existing) {
+                    script.src = "https://cdn.jsdelivr.net/gh/luminsdk/script@latest/lumin.min.js";
+                    script.dataset.luminSdk = "true";
+                    document.head.appendChild(script);
+                } else if (window.Lumin) {
+                    luminLoaded = true;
+                    finish(resolve, true);
+                }
+            }).then(() => {
+                if (luminActive) return initLumin();
+            }).catch(error => {
+                luminLoaded = false;
+                modeStatus.textContent = "LuminSDK failed to load";
+                showToast("LuminSDK couldn't load");
+                console.error("LuminSDK load error:", error);
+            }).finally(() => {
+                luminLoading = null;
+            });
+
+            return luminLoading;
         }
 
-        function initLumin() {
-            if (!window.Lumin) return;
+        async function initLumin() {
+            if (!window.Lumin || !luminActive) return;
 
-            destroyLumin();
+            try {
+                // LuminSDK's destroy() leaves a shadow-rooted container behind.
+                // Replacing the element before the next init avoids the blank-grid problem.
+                if (typeof window.Lumin.destroy === "function") {
+                    try { window.Lumin.destroy(); } catch (error) { console.warn("Lumin destroy warning:", error); }
+                }
 
-            const theme = document.body.classList.contains("light") ? "light" : "dark";
+                replaceLuminContainer();
 
-            window.Lumin.init({
-                container: "#lumin-games",
-                theme,
-                columns: 8,
-                rows: 4
-            });
+                const theme = document.body.classList.contains("light") ? "light" : "dark";
+
+                modeStatus.textContent = "loading LuminSDK games…";
+
+                await window.Lumin.init({
+                    container: "#lumin-games",
+                    theme,
+                    columns: 8,
+                    rows: 4,
+                    showSearch: true,
+                    showCategories: true,
+                    showRandom: true,
+                    onReady: () => {
+                        if (luminActive) modeStatus.textContent = "LuminSDK games";
+                    },
+                    onGameStart: game => {
+                        if (game?.name) modeStatus.textContent = "playing · " + game.name;
+                    },
+                    onGameEnd: () => {
+                        if (luminActive) modeStatus.textContent = "LuminSDK games";
+                    },
+                    onError: error => {
+                        console.error("LuminSDK error:", error);
+                        if (luminActive) modeStatus.textContent = "LuminSDK error — check connection";
+                    }
+                });
+            } catch (error) {
+                console.error("LuminSDK init error:", error);
+                if (luminActive) {
+                    modeStatus.textContent = "LuminSDK failed to initialize";
+                    showToast("LuminSDK couldn't initialize");
+                }
+            }
         }
 
         function destroyLumin() {
             if (window.Lumin && typeof window.Lumin.destroy === "function") {
                 try {
                     window.Lumin.destroy();
-                } catch {}
+                } catch (error) {
+                    console.warn("Lumin destroy warning:", error);
+                }
             }
-            luminGames.innerHTML = "";
+
+            const container = document.getElementById("lumin-games");
+            if (container) container.innerHTML = "";
         }
 
         function updateThemeButton() {
@@ -1347,8 +1428,13 @@
             if (luminActive) initLumin();
         });
 
-        modeToggle.addEventListener("click", () => {
-            setMode(luminActive ? "static" : "lumin");
+        modeToggle.addEventListener("click", async () => {
+            modeToggle.disabled = true;
+            try {
+                await setMode(luminActive ? "static" : "lumin");
+            } finally {
+                modeToggle.disabled = false;
+            }
         });
 
         if (localStorage.getItem("velora-theme") === "light") {
