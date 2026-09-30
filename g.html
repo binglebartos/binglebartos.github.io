@@ -968,6 +968,31 @@
         let lastPlayerUrl = "";
         let toastTimer = null;
 
+        // Function to close the game player
+        function closeGamePlayer() {
+            player.classList.remove("open");
+            player.setAttribute("aria-hidden", "true");
+            document.body.classList.remove("player-open");
+            playerFrame.src = "";
+        }
+
+        // Listen for Escape key to close game
+        document.addEventListener("keydown", function(event) {
+            if (event.key === "Escape" && player.classList.contains("open")) {
+                closeGamePlayer();
+            }
+        });
+
+        // Handle back button click (already existing but ensure it works)
+        playerHome.addEventListener("click", closeGamePlayer);
+
+        // Handle browser back navigation
+        window.addEventListener("popstate", function() {
+            if (player.classList.contains("open")) {
+                closeGamePlayer();
+            }
+        });
+
         function getFavorites() {
             try {
                 return JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
@@ -999,165 +1024,267 @@
             const title = (titleEl?.textContent || link.getAttribute("aria-label") || card.textContent || "game")
                 .replace(/\s+/g, " ")
                 .trim();
+            const imgEl = card.querySelector("img");
+            const img = imgEl?.src || "";
 
-            return { href: link.href, title };
+            return { link, title, img };
         }
 
-        function closePlayer() {
-            player.classList.remove("open");
-            body.classList.remove("player-open");
-            playerFrame.src = "";
-            currentGame = null;
-        }
+        function openPlayer(info) {
+            if (!info) return;
 
-        function openPlayer(href, title) {
-            currentGame = { href, title };
-            playerTitle.textContent = title;
-            playerFrame.src = href;
+            currentGame = info;
+            playerTitle.textContent = info.title;
+            playerFrame.src = info.link.href;
             player.classList.add("open");
-            body.classList.add("player-open");
+            player.setAttribute("aria-hidden", "false");
+            document.body.classList.add("player-open");
+            lastPlayerUrl = info.link.href;
             playerLoading.classList.remove("hidden");
+            syncFavoriteButtons();
         }
 
-        playerHome.addEventListener("click", () => closePlayer());
-
-        player.addEventListener("click", (e) => {
-            if (e.target === player) closePlayer();
-        });
-
-        playerReload.addEventListener("click", () => {
-            playerFrame.src = playerFrame.src;
-        });
-
-        playerFullscreen.addEventListener("click", () => {
-            if (playerFrameShell.requestFullscreen) {
-                playerFrameShell.requestFullscreen();
+        function syncFavoriteButtons() {
+            const favorites = getFavorites();
+            const isFavorited = currentGame && favorites.some(fav => fav.link === currentGame.link.href);
+            if (isFavorited) {
+                playerFavorite.classList.add("active");
+                playerFavoriteIcon.textContent = "★";
+            } else {
+                playerFavorite.classList.remove("active");
+                playerFavoriteIcon.textContent = "☆";
             }
-        });
+        }
 
         function renderFavorites() {
-            const favs = getFavorites();
+            const favorites = getFavorites();
             favoritesGrid.innerHTML = "";
 
-            if (favs.length === 0) {
+            if (favorites.length === 0) {
                 favoritesEmpty.style.display = "block";
                 return;
             }
 
             favoritesEmpty.style.display = "none";
 
-            favs.forEach(fav => {
-                const div = document.createElement("div");
-                div.className = "favorite-card";
-                const img = document.createElement("img");
-                img.alt = fav.title;
-                img.loading = "lazy";
-                const title = document.createElement("p");
-                title.className = "favorite-card-title";
-                title.textContent = fav.title;
-                const remove = document.createElement("button");
-                remove.className = "favorite-remove";
-                remove.innerHTML = "✕";
-                remove.addEventListener("click", () => {
-                    const updated = getFavorites().filter(g => g.href !== fav.href);
+            favorites.forEach(fav => {
+                const card = document.createElement("a");
+                card.href = fav.link;
+                card.className = "favorite-card";
+                card.innerHTML = `
+                    <img src="${fav.img}" alt="${fav.title} Cover" loading="lazy">
+                    <p class="favorite-card-title">${fav.title}</p>
+                    <button class="favorite-remove" type="button" aria-label="Remove from favorites">×</button>
+                `;
+
+                const removeBtn = card.querySelector(".favorite-remove");
+                removeBtn.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    const updated = favorites.filter(f => f.link !== fav.link);
                     saveFavorites(updated);
                 });
 
-                div.appendChild(img);
-                div.appendChild(title);
-                div.appendChild(remove);
-
-                div.addEventListener("click", (e) => {
+                card.addEventListener("click", (e) => {
                     if (!e.target.closest(".favorite-remove")) {
-                        openPlayer(fav.href, fav.title);
+                        const info = { link: card, title: fav.title, img: fav.img };
+                        info.link.href = fav.link;
+                        openPlayer(info);
                     }
                 });
 
-                favoritesGrid.appendChild(div);
+                favoritesGrid.appendChild(card);
             });
         }
 
-        function syncFavoriteButtons() {
-            const favSet = new Set(getFavorites().map(f => f.href));
-            document.querySelectorAll(".favorite-toggle").forEach(btn => {
-                const card = btn.closest(".game-card, .game-item, .game");
-                if (card) {
-                    const info = gameInfo(card);
-                    btn.classList.toggle("active", info && favSet.has(info.href));
-                }
-            });
-        }
+        function createGameCard(game) {
+            const card = document.createElement("a");
+            card.href = game.href;
+            card.className = "game-card";
+            card.innerHTML = `
+                <img src="${game.img}" alt="${game.title} Cover" loading="lazy">
+                <div class="game-card-content">
+                    <h3 class="game-card-title">${game.title}</h3>
+                    <p class="game-card-description">${game.description || ""}</p>
+                </div>
+                <button class="favorite-toggle" type="button" aria-label="Add to favorites">☆</button>
+            `;
 
-        function renderGames() {
-            gameGrid.innerHTML = "";
-            const allGames = parseGames();
-            allGames.forEach(game => {
-                const a = document.createElement("a");
-                a.href = "#";
-                a.className = "game-card";
-                a.innerHTML = `<img src="${game.img}" alt="${game.alt}" loading="lazy"><p class="game-card-title">${game.title}</p>`;
+            const favoriteBtn = card.querySelector(".favorite-toggle");
+            favoriteBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                const favorites = getFavorites();
+                const isAlreadyFavorited = favorites.some(fav => fav.link === game.href);
 
-                const favBtn = document.createElement("button");
-                favBtn.className = "favorite-toggle";
-                favBtn.innerHTML = "☆";
-                favBtn.type = "button";
-
-                const favSet = new Set(getFavorites().map(f => f.href));
-                if (favSet.has(game.href)) {
-                    favBtn.classList.add("active");
+                if (isAlreadyFavorited) {
+                    const updated = favorites.filter(fav => fav.link !== game.href);
+                    saveFavorites(updated);
+                } else {
+                    favorites.push({ link: game.href, title: game.title, img: game.img });
+                    saveFavorites(favorites);
                 }
 
-                favBtn.addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    const favs = getFavorites();
-                    const idx = favs.findIndex(f => f.href === game.href);
-                    if (idx === -1) {
-                        favs.push({ href: game.href, title: game.title });
-                    } else {
-                        favs.splice(idx, 1);
-                    }
-                    saveFavorites(favs);
-                });
-
-                a.appendChild(favBtn);
-
-                a.addEventListener("click", (e) => {
-                    e.preventDefault();
-                    openPlayer(game.href, game.title);
-                });
-
-                gameGrid.appendChild(a);
+                syncFavoriteBtnState(card, game.href);
             });
+
+            card.addEventListener("click", (e) => {
+                if (!e.target.closest(".favorite-toggle")) {
+                    openPlayer(gameInfo(card));
+                }
+            });
+
+            syncFavoriteBtnState(card, game.href);
+            return card;
         }
 
-        function parseGames() {
-            const div = document.createElement("div");
-            div.innerHTML = games;
-            return Array.from(div.querySelectorAll("a")).map(a => ({
-                href: a.href,
-                title: a.textContent.trim() || a.getAttribute("aria-label") || "game",
-                img: a.querySelector("img")?.src || "favicon.png",
-                alt: a.querySelector("img")?.alt || "game thumbnail"
-            }));
+        function syncFavoriteBtnState(card, gameHref) {
+            const favorites = getFavorites();
+            const btn = card.querySelector(".favorite-toggle");
+            const isFavorited = favorites.some(fav => fav.link === gameHref);
+            if (isFavorited) {
+                btn.classList.add("active");
+                btn.textContent = "★";
+            } else {
+                btn.classList.remove("active");
+                btn.textContent = "☆";
+            }
         }
 
-        renderGames();
-        renderFavorites();
+        playerReload.addEventListener("click", () => {
+            playerFrame.src = lastPlayerUrl;
+        });
+
+        playerFullscreen.addEventListener("click", () => {
+            playerFrameShell.requestFullscreen?.().catch(err => {
+                console.error("Fullscreen request failed:", err);
+            });
+        });
+
+        playerFavorite.addEventListener("click", () => {
+            if (!currentGame) return;
+
+            const favorites = getFavorites();
+            const isAlreadyFavorited = favorites.some(fav => fav.link === currentGame.link.href);
+
+            if (isAlreadyFavorited) {
+                const updated = favorites.filter(fav => fav.link !== currentGame.link.href);
+                saveFavorites(updated);
+            } else {
+                favorites.push({
+                    link: currentGame.link.href,
+                    title: currentGame.title,
+                    img: currentGame.img,
+                });
+                saveFavorites(updated);
+            }
+
+            syncFavoriteButtons();
+        });
+
+        function showToast(message) {
+            playerToast.textContent = message;
+            playerToast.classList.add("show");
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                playerToast.classList.remove("show");
+            }, 2000);
+        }
 
         playerFrame.addEventListener("load", () => {
             playerLoading.classList.add("hidden");
         });
 
-        playerFrame.addEventListener("error", () => {
-            playerLoading.classList.add("hidden");
+        search.addEventListener("input", function() {
+            const query = this.value.toLowerCase();
+            const cards = document.querySelectorAll(".game-card");
+            let visibleCount = 0;
+
+            cards.forEach(card => {
+                const title = card.querySelector(".game-card-title")?.textContent.toLowerCase() || "";
+                const description = card.querySelector(".game-card-description")?.textContent.toLowerCase() || "";
+
+                if (title.includes(query) || description.includes(query)) {
+                    card.style.display = "";
+                    visibleCount++;
+                } else {
+                    card.style.display = "none";
+                }
+            });
+
+            noResults.style.display = visibleCount === 0 ? "block" : "none";
         });
 
-        document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape" && player.classList.contains("open")) {
-                closePlayer();
+        themeToggle.addEventListener("click", () => {
+            const isDark = document.documentElement.classList.contains("light");
+            if (isDark) {
+                document.documentElement.classList.remove("light");
+                localStorage.setItem("velora-theme", "dark");
+            } else {
+                document.documentElement.classList.add("light");
+                localStorage.setItem("velora-theme", "light");
             }
         });
-    </script>
 
+        modeToggle.addEventListener("click", async function() {
+            if (luminActive) {
+                luminActive = false;
+                modeStatus.textContent = "static mode";
+                luminWrap.classList.add("lumin-hidden");
+                gameGrid.style.display = "";
+                return;
+            }
+
+            if (!luminLoaded) {
+                luminLoading = showToast("loading lumin mode...");
+                try {
+                    const response = await fetch("https://api.github.com/repos/WanoCapy/Lumin/contents/games");
+                    const data = await response.json();
+
+                    if (!Array.isArray(data)) throw new Error("Invalid response");
+
+                    const games = data
+                        .filter(file => file.name.endsWith(".html"))
+                        .map(file => ({
+                            title: file.name.replace(".html", "").replace(/[-_]/g, " "),
+                            href: `https://cdn.jsdelivr.net/gh/WanoCapy/Lumin/games/${file.name}`,
+                            description: "from lumin",
+                            img: "https://via.placeholder.com/300x188?text=Lumin+Game",
+                        }));
+
+                    luminGames.innerHTML = "";
+                    games.forEach(game => {
+                        luminGames.appendChild(createGameCard(game));
+                    });
+
+                    luminLoaded = true;
+                    showToast("lumin mode loaded!");
+                } catch (error) {
+                    showToast("failed to load lumin mode");
+                    console.error("Error loading lumin:", error);
+                    return;
+                }
+            }
+
+            luminActive = true;
+            modeStatus.textContent = "lumin mode";
+            gameGrid.style.display = "none";
+            luminWrap.classList.remove("lumin-hidden");
+        });
+
+        // Initialize
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(games, "text/html");
+        const gameLinks = doc.querySelectorAll("a");
+
+        gameLinks.forEach(link => {
+            const title = link.textContent.trim();
+            const href = link.getAttribute("href");
+            const img = link.querySelector("img")?.src || "";
+
+            const card = createGameCard({ title, href, img, description: "" });
+            gameGrid.appendChild(card);
+        });
+
+        renderFavorites();
+    </script>
 </body>
 </html>
