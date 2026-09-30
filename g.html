@@ -817,7 +817,7 @@
     <header class="site-header">
         <div class="header-inner">
 
-            <a class="wordmark center-title" href="/">
+            <a class="wordmark center-title" href="g.html">
                 velora
             </a>
 
@@ -1000,466 +1000,163 @@
                 .replace(/\s+/g, " ")
                 .trim();
 
-            const image = card.querySelector("img")?.src || "";
-
-            return {
-                id: link.href,
-                title: title || "game",
-                href: link.href,
-                image
-            };
+            return { href: link.href, title };
         }
 
-        function isFavorite(href) {
-            return getFavorites().some(item => item.href === href);
+        function closePlayer() {
+            player.classList.remove("open");
+            body.classList.remove("player-open");
+            playerFrame.src = "";
+            currentGame = null;
         }
 
-        function toggleFavorite(info, event) {
-            event.preventDefault();
-            event.stopPropagation();
+        function openPlayer(href, title) {
+            currentGame = { href, title };
+            playerTitle.textContent = title;
+            playerFrame.src = href;
+            player.classList.add("open");
+            body.classList.add("player-open");
+            playerLoading.classList.remove("hidden");
+        }
 
-            const favorites = getFavorites();
-            const index = favorites.findIndex(item => item.href === info.href);
+        playerHome.addEventListener("click", () => closePlayer());
 
-            if (index >= 0) {
-                favorites.splice(index, 1);
-            } else {
-                favorites.unshift(info);
+        player.addEventListener("click", (e) => {
+            if (e.target === player) closePlayer();
+        });
+
+        playerReload.addEventListener("click", () => {
+            playerFrame.src = playerFrame.src;
+        });
+
+        playerFullscreen.addEventListener("click", () => {
+            if (playerFrameShell.requestFullscreen) {
+                playerFrameShell.requestFullscreen();
+            }
+        });
+
+        function renderFavorites() {
+            const favs = getFavorites();
+            favoritesGrid.innerHTML = "";
+
+            if (favs.length === 0) {
+                favoritesEmpty.style.display = "block";
+                return;
             }
 
-            saveFavorites(favorites);
-            updatePlayerFavorite();
-        }
+            favoritesEmpty.style.display = "none";
 
-        function addFavoriteButton(card) {
-            if (card.querySelector(":scope > .favorite-toggle")) return;
+            favs.forEach(fav => {
+                const div = document.createElement("div");
+                div.className = "favorite-card";
+                const img = document.createElement("img");
+                img.alt = fav.title;
+                img.loading = "lazy";
+                const title = document.createElement("p");
+                title.className = "favorite-card-title";
+                title.textContent = fav.title;
+                const remove = document.createElement("button");
+                remove.className = "favorite-remove";
+                remove.innerHTML = "✕";
+                remove.addEventListener("click", () => {
+                    const updated = getFavorites().filter(g => g.href !== fav.href);
+                    saveFavorites(updated);
+                });
 
-            const info = gameInfo(card);
-            if (!info) return;
+                div.appendChild(img);
+                div.appendChild(title);
+                div.appendChild(remove);
 
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "favorite-toggle";
-            button.setAttribute("aria-label", "favorite " + info.title);
+                div.addEventListener("click", (e) => {
+                    if (!e.target.closest(".favorite-remove")) {
+                        openPlayer(fav.href, fav.title);
+                    }
+                });
 
-            button.addEventListener("click", event => toggleFavorite(info, event));
-
-            card.appendChild(button);
-            updateFavoriteButton(button, info.href);
-        }
-
-        function updateFavoriteButton(button, href) {
-            const active = isFavorite(href);
-            button.classList.toggle("active", active);
-            button.textContent = active ? "★" : "☆";
-            button.title = active ? "remove favorite" : "add favorite";
+                favoritesGrid.appendChild(div);
+            });
         }
 
         function syncFavoriteButtons() {
-            gameGrid.querySelectorAll(".game-card, .game-item, .game").forEach(card => {
-                addFavoriteButton(card);
-                const button = card.querySelector(":scope > .favorite-toggle");
-                const info = gameInfo(card);
-                if (button && info) updateFavoriteButton(button, info.href);
+            const favSet = new Set(getFavorites().map(f => f.href));
+            document.querySelectorAll(".favorite-toggle").forEach(btn => {
+                const card = btn.closest(".game-card, .game-item, .game");
+                if (card) {
+                    const info = gameInfo(card);
+                    btn.classList.toggle("active", info && favSet.has(info.href));
+                }
             });
         }
 
-        function renderFavorites() {
-            const favorites = getFavorites();
-            favoritesGrid.innerHTML = "";
+        function renderGames() {
+            gameGrid.innerHTML = "";
+            const allGames = parseGames();
+            allGames.forEach(game => {
+                const a = document.createElement("a");
+                a.href = "#";
+                a.className = "game-card";
+                a.innerHTML = `<img src="${game.img}" alt="${game.alt}" loading="lazy"><p class="game-card-title">${game.title}</p>`;
 
-            favorites.forEach(item => {
-                const card = document.createElement("div");
-                card.className = "favorite-card";
+                const favBtn = document.createElement("button");
+                favBtn.className = "favorite-toggle";
+                favBtn.innerHTML = "☆";
+                favBtn.type = "button";
 
-                const link = document.createElement("a");
-                link.href = item.href;
-                link.target = "_self";
-
-                if (item.image) {
-                    const img = document.createElement("img");
-                    img.src = item.image;
-                    img.alt = "";
-                    img.loading = "lazy";
-                    link.appendChild(img);
+                const favSet = new Set(getFavorites().map(f => f.href));
+                if (favSet.has(game.href)) {
+                    favBtn.classList.add("active");
                 }
 
-                const title = document.createElement("p");
-                title.className = "favorite-card-title";
-                title.textContent = item.title;
-                link.appendChild(title);
-
-                link.addEventListener("click", event => {
-                    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                    event.preventDefault();
-                    openGame(item);
+                favBtn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    const favs = getFavorites();
+                    const idx = favs.findIndex(f => f.href === game.href);
+                    if (idx === -1) {
+                        favs.push({ href: game.href, title: game.title });
+                    } else {
+                        favs.splice(idx, 1);
+                    }
+                    saveFavorites(favs);
                 });
 
-                const remove = document.createElement("button");
-                remove.type = "button";
-                remove.className = "favorite-remove";
-                remove.textContent = "×";
-                remove.setAttribute("aria-label", "remove " + item.title + " from favorites");
-                remove.addEventListener("click", event => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const next = getFavorites().filter(fav => fav.href !== item.href);
-                    saveFavorites(next);
+                a.appendChild(favBtn);
+
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    openPlayer(game.href, game.title);
                 });
 
-                card.appendChild(link);
-                card.appendChild(remove);
-                favoritesGrid.appendChild(card);
+                gameGrid.appendChild(a);
             });
-
-            favoritesEmpty.style.display = favorites.length ? "none" : "block";
         }
 
-        function showToast(message) {
-            clearTimeout(toastTimer);
-            playerToast.textContent = message;
-            playerToast.classList.add("show");
-            toastTimer = setTimeout(() => playerToast.classList.remove("show"), 1700);
+        function parseGames() {
+            const div = document.createElement("div");
+            div.innerHTML = games;
+            return Array.from(div.querySelectorAll("a")).map(a => ({
+                href: a.href,
+                title: a.textContent.trim() || a.getAttribute("aria-label") || "game",
+                img: a.querySelector("img")?.src || "favicon.png",
+                alt: a.querySelector("img")?.alt || "game thumbnail"
+            }));
         }
 
-        function updatePlayerFavorite() {
-            if (!currentGame) return;
-            const active = isFavorite(currentGame.href);
-            playerFavorite.classList.toggle("active", active);
-            playerFavoriteIcon.textContent = active ? "★" : "☆";
-            playerFavorite.title = active ? "Remove favorite" : "Favorite game";
-            playerFavorite.setAttribute(
-                "aria-label",
-                active ? "Remove " + currentGame.title + " from favorites" : "Favorite " + currentGame.title
-            );
-        }
-
-        function openGame(info) {
-            currentGame = info;
-            lastPlayerUrl = info.href;
-            playerTitle.textContent = info.title || "game";
-            playerLoading.classList.remove("hidden");
-            player.classList.add("open");
-            player.setAttribute("aria-hidden", "false");
-            document.body.classList.add("player-open");
-            localStorage.setItem(PLAYER_KEY, "open");
-            updatePlayerFavorite();
-
-            playerFrame.src = info.href;
-
-            if (location.hash !== "#game") {
-                history.pushState({ veloraGame: true }, "", "#game");
-            }
-        }
-
-        function closeGame(updateHistory = true) {
-            player.classList.remove("open");
-            player.setAttribute("aria-hidden", "true");
-            document.body.classList.remove("player-open");
-            localStorage.removeItem(PLAYER_KEY);
-
-            try {
-                playerFrame.src = "about:blank";
-            } catch {}
-
-            currentGame = null;
-
-            if (updateHistory && location.hash === "#game") {
-                history.pushState({}, "", location.pathname + location.search);
-            }
-        }
-
-        function reloadGame() {
-            if (!currentGame) return;
-            playerLoading.classList.remove("hidden");
-            lastPlayerUrl = currentGame.href;
-            playerFrame.src = "about:blank";
-            requestAnimationFrame(() => {
-                playerFrame.src = lastPlayerUrl;
-            });
-            showToast("game reloaded");
-        }
-
-        function favoriteCurrentGame(event) {
-            event.preventDefault();
-            if (!currentGame) return;
-
-            const favorites = getFavorites();
-            const index = favorites.findIndex(item => item.href === currentGame.href);
-
-            if (index >= 0) {
-                favorites.splice(index, 1);
-                showToast("removed from favorites");
-            } else {
-                favorites.unshift(currentGame);
-                showToast("added to favorites");
-            }
-
-            saveFavorites(favorites);
-            updatePlayerFavorite();
-        }
-
-        async function togglePlayerFullscreen() {
-            try {
-                if (document.fullscreenElement) {
-                    await document.exitFullscreen();
-                    return;
-                }
-
-                if (playerFrameShell.requestFullscreen) {
-                    await playerFrameShell.requestFullscreen();
-                } else if (playerFrame.requestFullscreen) {
-                    await playerFrame.requestFullscreen();
-                } else {
-                    showToast("fullscreen unavailable here");
-                }
-            } catch {
-                showToast("fullscreen unavailable here");
-            }
-        }
-
-        function interceptGameNavigation(root = gameGrid) {
-            root.addEventListener("click", event => {
-                const target = event.target instanceof Element ? event.target : null;
-                if (!target || target.closest(".favorite-toggle")) return;
-
-                const link = target.closest("a[href]");
-                if (!link) return;
-
-                const card = link.closest(".game-card, .game-item, .game");
-                if (!card) return;
-
-                const info = gameInfo(card);
-                if (!info) return;
-
-                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-
-                event.preventDefault();
-                event.stopPropagation();
-                openGame(info);
-            }, true);
-        }
+        renderGames();
+        renderFavorites();
 
         playerFrame.addEventListener("load", () => {
             playerLoading.classList.add("hidden");
         });
 
-        playerHome.addEventListener("click", () => closeGame(true));
-        playerFavorite.addEventListener("click", favoriteCurrentGame);
-        playerReload.addEventListener("click", reloadGame);
-        playerFullscreen.addEventListener("click", togglePlayerFullscreen);
-
-        document.addEventListener("keydown", event => {
-            if (!player.classList.contains("open")) return;
-
-            if (event.key === "Escape" && !document.fullscreenElement) {
-                closeGame(true);
-            }
+        playerFrame.addEventListener("error", () => {
+            playerLoading.classList.add("hidden");
         });
 
-        window.addEventListener("popstate", () => {
-            if (location.hash !== "#game" && player.classList.contains("open")) {
-                closeGame(false);
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && player.classList.contains("open")) {
+                closePlayer();
             }
         });
-
-        function replaceLuminContainer() {
-            const oldContainer = document.getElementById("lumin-games");
-            if (!oldContainer) return null;
-
-            const freshContainer = document.createElement("div");
-            freshContainer.id = "lumin-games";
-            oldContainer.replaceWith(freshContainer);
-
-            return freshContainer;
-        }
-
-        async function setMode(mode) {
-            luminActive = mode === "lumin";
-            localStorage.setItem(MODE_KEY, luminActive ? "lumin" : "static");
-
-            gameGrid.classList.toggle("lumin-hidden", luminActive);
-            noResults.classList.toggle("lumin-hidden", luminActive);
-            luminWrap.classList.toggle("lumin-hidden", !luminActive);
-            search.classList.toggle("lumin-hidden", luminActive);
-
-            if (luminActive) {
-                modeToggle.textContent = "static";
-                modeStatus.textContent = "connecting to LuminSDK…";
-                await loadLumin();
-            } else {
-                modeToggle.textContent = "lumin";
-                modeStatus.textContent = "static mode";
-                destroyLumin();
-                syncFavoriteButtons();
-            }
-        }
-
-        function loadLumin() {
-            if (window.Lumin) {
-                luminLoaded = true;
-                return initLumin();
-            }
-
-            if (luminLoading) return luminLoading;
-
-            luminLoading = new Promise((resolve, reject) => {
-                const existing = document.querySelector('script[data-lumin-sdk]');
-                const script = existing || document.createElement("script");
-
-                let settled = false;
-                const finish = (fn, value) => {
-                    if (settled) return;
-                    settled = true;
-                    fn(value);
-                };
-
-                script.onload = () => {
-                    if (window.Lumin) {
-                        luminLoaded = true;
-                        finish(resolve, true);
-                    } else {
-                        finish(reject, new Error("LuminSDK loaded without the Lumin global."));
-                    }
-                };
-
-                script.onerror = () => finish(reject, new Error("Could not load LuminSDK."));
-
-                if (!existing) {
-                    script.src = "https://cdn.jsdelivr.net/gh/luminsdk/script@latest/lumin.min.js";
-                    script.dataset.luminSdk = "true";
-                    document.head.appendChild(script);
-                } else if (window.Lumin) {
-                    luminLoaded = true;
-                    finish(resolve, true);
-                }
-            }).then(() => {
-                if (luminActive) return initLumin();
-            }).catch(error => {
-                luminLoaded = false;
-                modeStatus.textContent = "LuminSDK failed to load";
-                showToast("LuminSDK couldn't load");
-                console.error("LuminSDK load error:", error);
-            }).finally(() => {
-                luminLoading = null;
-            });
-
-            return luminLoading;
-        }
-
-        async function initLumin() {
-            if (!window.Lumin || !luminActive) return;
-
-            try {
-                // LuminSDK's destroy() leaves a shadow-rooted container behind.
-                // Replacing the element before the next init avoids the blank-grid problem.
-                if (typeof window.Lumin.destroy === "function") {
-                    try { window.Lumin.destroy(); } catch (error) { console.warn("Lumin destroy warning:", error); }
-                }
-
-                replaceLuminContainer();
-
-                const theme = document.body.classList.contains("light") ? "light" : "dark";
-
-                modeStatus.textContent = "loading LuminSDK games…";
-
-                await window.Lumin.init({
-                    container: "#lumin-games",
-                    theme,
-                    columns: 8,
-                    rows: 4,
-                    showSearch: true,
-                    showCategories: true,
-                    showRandom: true,
-                    onReady: () => {
-                        if (luminActive) modeStatus.textContent = "LuminSDK games";
-                    },
-                    onGameStart: game => {
-                        if (game?.name) modeStatus.textContent = "playing · " + game.name;
-                    },
-                    onGameEnd: () => {
-                        if (luminActive) modeStatus.textContent = "LuminSDK games";
-                    },
-                    onError: error => {
-                        console.error("LuminSDK error:", error);
-                        if (luminActive) modeStatus.textContent = "LuminSDK error — check connection";
-                    }
-                });
-            } catch (error) {
-                console.error("LuminSDK init error:", error);
-                if (luminActive) {
-                    modeStatus.textContent = "LuminSDK failed to initialize";
-                    showToast("LuminSDK couldn't initialize");
-                }
-            }
-        }
-
-        function destroyLumin() {
-            if (window.Lumin && typeof window.Lumin.destroy === "function") {
-                try {
-                    window.Lumin.destroy();
-                } catch (error) {
-                    console.warn("Lumin destroy warning:", error);
-                }
-            }
-
-            const container = document.getElementById("lumin-games");
-            if (container) container.innerHTML = "";
-        }
-
-        function updateThemeButton() {
-            themeToggle.textContent =
-                document.body.classList.contains("light")
-                    ? "☾ dark"
-                    : "☀ light";
-        }
-
-        themeToggle.addEventListener("click", () => {
-            const light = document.body.classList.toggle("light");
-
-            localStorage.setItem(
-                "velora-theme",
-                light ? "light"
-                    : "dark"
-            );
-
-            updateThemeButton();
-
-            if (luminActive) initLumin();
-        });
-
-        modeToggle.addEventListener("click", async () => {
-            modeToggle.disabled = true;
-            try {
-                await setMode(luminActive ? "static" : "lumin");
-            } finally {
-                modeToggle.disabled = false;
-            }
-        });
-
-        if (localStorage.getItem("velora-theme") === "light") {
-            document.body.classList.add("light");
-        }
-
-        if (location.hash === "#game") {
-            history.replaceState({}, "", location.pathname + location.search);
-        }
-
-        renderFavorites();
-        syncFavoriteButtons();
-        interceptGameNavigation();
-
-        const observer = new MutationObserver(() => {
-            if (!luminActive) syncFavoriteButtons();
-        });
-
-        observer.observe(gameGrid, {
-            childList: true,
-            subtree: true
-        });
-
-        updateThemeButton();
-        setMode(localStorage.getItem(MODE_KEY) === "lumin" ? "lumin" : "static");
     </script>
 
 </body>
