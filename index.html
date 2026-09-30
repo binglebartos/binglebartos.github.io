@@ -525,12 +525,6 @@
     const toggle = document.getElementById("togglePassword");
     const remember = document.getElementById("remember");
 
-    // Demo login requested:
-    // username: velora
-    // password: velora-
-    // success destination: g.html
-    const VALID_USERNAME = "velora";
-    const VALID_PASSWORD = "velora-";
     const DESTINATION = "g.html";
 
     const savedUser = localStorage.getItem("numerra_remembered_user");
@@ -553,33 +547,24 @@
       message.className = "message";
 
       const user = username.value.trim();
-      const pass = password.value;
 
       button.disabled = true;
       button.textContent = "Signing in…";
 
       // Tiny delay makes the interaction feel like a real portal login.
       setTimeout(() => {
-        if (user === VALID_USERNAME && pass === VALID_PASSWORD) {
-          if (remember.checked) {
-            localStorage.setItem("numerra_remembered_user", user);
-          } else {
-            localStorage.removeItem("numerra_remembered_user");
-          }
-
-          message.textContent = "Login successful. Opening your dashboard…";
-          message.className = "message success";
-
-          setTimeout(() => {
-            window.location.href = DESTINATION;
-          }, 350);
+        if (remember.checked && user) {
+          localStorage.setItem("numerra_remembered_user", user);
         } else {
-          message.textContent = "Incorrect username or password.";
-          message.className = "message error";
-          button.disabled = false;
-          button.textContent = "Sign in";
-          password.focus();
+          localStorage.removeItem("numerra_remembered_user");
         }
+
+        message.textContent = "Login successful. Opening your dashboard…";
+        message.className = "message success";
+
+        setTimeout(() => {
+          window.location.href = DESTINATION;
+        }, 350);
       }, 420);
     });
   </script>
