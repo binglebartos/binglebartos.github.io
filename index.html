@@ -466,7 +466,6 @@
                 autocomplete="username"
                 placeholder="Enter your username"
                 spellcheck="false"
-                required
               />
             </div>
           </div>
@@ -480,7 +479,6 @@
                 type="password"
                 autocomplete="current-password"
                 placeholder="Enter your password"
-                required
               />
               <button
                 class="password-toggle"
@@ -556,12 +554,6 @@
 
       const user = username.value.trim();
       const pass = password.value;
-
-      if (!user || !pass) {
-        message.textContent = "Enter your username and password.";
-        message.className = "message error";
-        return;
-      }
 
       button.disabled = true;
       button.textContent = "Signing in…";
